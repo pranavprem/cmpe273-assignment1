@@ -5,6 +5,7 @@ from github import UnknownObjectException
 from github import RateLimitExceededException
 import sys
 import yaml
+import json
 
 
 app = Flask(__name__)
@@ -48,7 +49,7 @@ else:
     except UnknownObjectException as e:
         try:
             if set_response_flag==False:
-                response=yaml.safe_load(git.get_file_contents(config_file+".json").content.decode(git.get_contents(config_file+".json").encoding))
+                response=json.loads(git.get_file_contents(config_file+".json").content.decode(git.get_contents(config_file+".json").encoding))
                 set_response_flag=True
         except UnknownObjectException:
             if set_response_flag==False:
