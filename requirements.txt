@@ -1,1 +1,3 @@
 flask
+pygithub
+pyyaml
