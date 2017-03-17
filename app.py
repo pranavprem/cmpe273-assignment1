@@ -31,7 +31,7 @@ except Exception as e:
 
 def get_required_response(config_file):      
     try:
-        return yaml.safe_load(git.get_file_contents(config_file).content.decode(git.get_contents(config_file).encoding))
+        return git.get_file_contents(config_file).content.decode(git.get_contents(config_file).encoding)
     except UnknownObjectException as e:
         return "The file requested was not found."
     except Exception as e:
@@ -44,7 +44,7 @@ def hello(config_file):
     if isinstance(git, basestring):
         return git
     else:
-        return jsonify(get_required_response(config_file))
+        return get_required_response(config_file)
 
 if __name__ == "__main__":
     app.config["url"] = sys.argv[1]
