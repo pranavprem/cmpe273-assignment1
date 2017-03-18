@@ -1,6 +1,9 @@
 """Assignment - 1 CMPE 273 Spring 17"""
 import sys
+import json
+import yaml
 from flask import Flask
+from flask import jsonify
 from github import Github
 from github import UnknownObjectException
 from github import RateLimitExceededException
@@ -24,7 +27,7 @@ if i==len(url):
     container is made. The function will only need to keep pulling the latest files from this repository.
 """
 try:
-    git = Github().get_user(user).get_repo(repo)
+    git = Github("pranavprem","aptisgr8").get_user(user).get_repo(repo)
 except UnknownObjectException:
     git = "repository does not exist. Please check link supplied"
 except RateLimitExceededException:
@@ -38,7 +41,17 @@ def get_required_response(config_file):
     try:
         return git.get_file_contents(config_file).content.decode(git.get_contents(config_file).encoding)
     except UnknownObjectException as e:
-        return "The file requested was not found."
+        filename=config_file.split(".")[0]
+        extn=config_file.split(".")[1]
+        try:
+            if extn=="json":
+                return jsonify(yaml.safe_load(git.get_file_contents(filename+".yml").content.decode(git.get_contents(filename+".yml").encoding)))
+            elif extn=="yml":
+                response = yaml.safe_dump(json.loads(git.get_file_contents(filename+".json").content.decode(git.get_contents(filename+".json").encoding)))
+                response = response[1:len(response)-2]
+                return response
+        except Exception as e:
+            return "File not found %s" % e
     except RateLimitExceededException:
         return "You have reached your github rate limit. Try after an hour"
     except Exception as e:
@@ -55,5 +68,4 @@ def controller(config_file):
         return get_required_response(config_file)
 
 if __name__ == "__main__":
-    app.config["url"] = sys.argv[1]
     app.run(debug=True,host='0.0.0.0')
