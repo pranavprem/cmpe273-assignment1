@@ -27,7 +27,7 @@ if i==len(url):
     container is made. The function will only need to keep pulling the latest files from this repository.
 """
 try:
-    git = Github("pranavprem","aptisgr8").get_user(user).get_repo(repo)
+    git = Github().get_user(user).get_repo(repo)
 except UnknownObjectException:
     git = "repository does not exist. Please check link supplied"
 except RateLimitExceededException:
