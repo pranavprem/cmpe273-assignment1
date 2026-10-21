@@ -1,133 +1,176 @@
-# TAKEN FROM PROF SITHU AUNG'S DESRIPTION OF THE ASSIGNMENT (https://github.com/sithu/cmpe273-spring17/tree/master/assignment1):
+# CMPE 273 Assignment 1
 
-#### Goal
-
-The purpose of this assignment is to build a simple [Flask](http://flask.pocoo.org/)  application which reads its configration data from a Github repo. Second, you will learn how to dockerize your application.
-
-#### Pre-requisites
-* Install [Visual Studio Code](https://code.visualstudio.com/) with [Python extension](https://code.visualstudio.com/docs/languages/python).
-* [A Linux Bash Shell for Windows 10](http://www.howtogeek.com/249966/how-to-install-and-use-the-linux-bash-shell-on-windows-10/)
-    
-#### I - Docker Setup
-
-* [1] Install [Docker]
-* [2] Create a Github repo called "cmpe273-assignment1" and clone the repo to your local machine.
+A small Flask service that reads configuration files from a GitHub repository and serves them over HTTP. Ask for a file by name. If that exact file is missing but the other format exists, the service converts YAML to JSON or JSON to YAML and returns the conversion.
 
 ```sh
-git clone https://github.com/{your_username}/cmpe273-assignment1
-cd cmpe273-assignment1
+python app.py https://github.com/sithu/assignment1-config-example
+curl http://127.0.0.1:5000/v1/dev-config.yml
+curl http://127.0.0.1:5000/v1/dev-config.json
 ```
 
-* [3] Create *requirements.txt* file and add this line to the file.
-```sh
-flask
-```
+There is no HTML interface. The API responds with the file body, or with pretty-printed JSON when it converts YAML.
 
-* [4] Create a Python script *app.py* file and add these code to the file.
-```python
-from flask import Flask
+## Original context
 
-app = Flask(__name__)
+This is Assignment 1 from **CMPE 273, Spring 2017**, at San Jose State University, taught by Prof. Sithu Aung. Pranav Prem wrote it in March 2017. The last commit before this refresh was 17 March 2017.
 
-@app.route("/")
-def hello():
-    return "Hello from Dockerized Flask App!!"
+The assignment had two parts:
 
-if __name__ == "__main__":
-    app.run(debug=True,host='0.0.0.0')
-```
+1. Dockerize a one-route Flask app.
+2. Make the app take a GitHub repository URL on the command line and serve that repo's config files at `/v1/<file>`, in both YAML and JSON. The sample repository is [sithu/assignment1-config-example](https://github.com/sithu/assignment1-config-example). The course write-up lived at [sithu/cmpe273-spring17 assignment1](https://github.com/sithu/cmpe273-spring17/tree/master/assignment1).
 
+The README that was committed with the assignment was a copy of that write-up. This file describes the project that was actually turned in.
 
-* [5] Create a Docker file *Dockerfile* without any file extension and add these lines to the file.
-```sh
-FROM python:2.7.13
-MAINTAINER Your Name "yourname@gmail.com"
-COPY . /app
-WORKDIR /app
-RUN pip install -r requirements.txt
-ENTRYPOINT ["python"]
-CMD ["app.py"]
-```
+The sample config repo only contains YAML (`dev-config.yml`, `test-config.yml`). Requesting the `.json` name is what exercises the converter.
 
-* [6] Run this command inside the cmpe273-assignment1 working directory. Make sure you have all these files in the current directory: Dockerfile, app.py, and requirements.txt
-```sh
-docker build -t assignment1-flask-app:latest .
-```
+## How it works
 
-* [7] Run this Docker command to list all images.
-```sh
-docker images
-```
+`python app.py <github-repo-url>` parses the URL, opens that repository through the GitHub API, and listens on port 5000.
 
-* [8] Run the Docker container using the image you created in the previous step.
-```sh
-docker run -d -p 5000:5000 assignment1-flask-app
-```
+`GET /v1/<config_file>` then:
 
-* [9] Lookup IP of the assignment1-flask-app container.
-```sh
-docker-machine ls
-# OR 
-docker-machine ip default
-```
-```sh
-NAME      ACTIVE   DRIVER       STATE     URL                         SWARM   DOCKER    ERRORS
-default   *        virtualbox   Running   tcp://192.168.99.100:2376           v1.11.1   
-tester    -        virtualbox   Saved                                         Unknown   
-```
-> Example: Under the "URL" column, "192.168.99.100" is the IP of your container.
+1. Fetches that path from the repository and returns the file bytes decoded as UTF-8. A file that is already there is returned as stored, not reformatted.
+2. If GitHub returns 404 and the name ends in `.json`, it fetches `<name>.yml`, parses it, and returns pretty JSON.
+3. If the name ends in `.yml`, it fetches `<name>.json` and returns the YAML line the original program produced (flow style, wrapping braces removed).
+4. Otherwise it returns a short plain-text error. Those errors are HTTP 200, which is how the 2017 app behaved.
 
-* [10] Open this URL in a web browser. If you see the Hello message, you can now commit all three files into your Github repo (cmpe273-lab1).
+The repository is chosen once, at process start. Later commits in that repo show up on the next request because each request calls the GitHub API again. Restart the process to point it at a different repository.
+
+Anonymous API calls are limited to 60 requests per hour per IP. Set `GITHUB_TOKEN` to a personal access token with read access to the repository contents and the limit rises to the authenticated quota. The token is optional. The process never reads a password from the command line or from the source tree.
+
+## Run it today
+
+Python 3.12 is the version this refresh is tested with. Python 2.7, which the original `Dockerfile` used, is end of life and the `python:2.7.13` image is not a practical base anymore.
+
+### Local
 
 ```sh
-http://{IP_FROM_STEP_9}:5000/
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py https://github.com/sithu/assignment1-config-example
 ```
 
-[Docker Cheat Sheet](https://github.com/wsargent/docker-cheat-sheet)
-
-[Docker]: https://docs.docker.com/engine/installation/#/on-osx-and-windows
-
-#### II - Build a sample application that pulls configuration from a Github repo. 
-
-* Integrate with Github to pull application configuration from a [config repo](https://github.com/sithu/assignment1-config-example) which has a set of YML files with {environment}-config.yml format.
-
-_YAML Type Example_
+In another shell:
 
 ```sh
-curl http://0.0.0.0:5000/v1/dev-config.yml
+curl -sS http://127.0.0.1:5000/v1/dev-config.yml
+curl -sS http://127.0.0.1:5000/v1/dev-config.json
+curl -sS http://127.0.0.1:5000/v1/test-config.yml
+```
 
+`dev-config.yml` from the sample repo comes back unchanged:
+
+```yaml
 welcome_message: "Hello from Dockerized Flask App"
 
-curl http://0.0.0.0:5000/v1/test-config.yml
+another_config: "foo bar"
+```
 
+`dev-config.json` is converted from that YAML:
+
+```json
+{
+  "welcome_message": "Hello from Dockerized Flask App",
+  "another_config": "foo bar"
+}
+```
+
+`test-config.yml` is:
+
+```yaml
 welcome_message: "Hello from Dockerized Flask App Test"
 ```
 
-_JSON Type Example_
+Optional environment variables:
+
+| Variable | Effect |
+| --- | --- |
+| `GITHUB_TOKEN` | Authenticates the GitHub API client. Leave it unset to stay anonymous. |
+| `FLASK_DEBUG` | Set to `1` to turn on Flask's debugger and reloader. The default is off. |
+
+The server binds to `0.0.0.0:5000` so a container can publish the port. It is Flask's built-in development server, the same one the assignment used.
+
+### Docker
 
 ```sh
-curl http://0.0.0.0:5000/v1/dev-config.json
-{
-    "welcome_message": "Hello from Dockerized Flask App"
-}
+docker build -t assignment1-flask-app .
+docker run --rm -p 5000:5000 assignment1-flask-app
+```
 
-curl http://0.0.0.0:5000/v1/test-config.json
+The image's default URL is the sample config repo above. Pass a different URL to override it:
+
+```sh
+docker run --rm -p 5000:5000 assignment1-flask-app https://github.com/sithu/assignment1-config-example
+```
+
+Pass a token at runtime without baking it into the image:
+
+```sh
+docker run --rm -p 5000:5000 -e GITHUB_TOKEN assignment1-flask-app
+```
+
+### Tests and lint
+
+```sh
+pip install -r requirements-dev.txt
+ruff check .
+ruff format --check .
+pytest
+```
+
+GitHub Actions runs those three commands on Python 3.12.
+
+## Tech stack
+
+- Python 3.12
+- Flask 3.1
+- PyGithub 2.10
+- PyYAML 6.0
+- Docker (`python:3.12-slim`)
+- pytest and ruff for tests and lint
+
+Direct and transitive versions are pinned in `requirements.txt`. Test and lint pins are in `requirements-dev.txt`.
+
+## Project structure
+
+```
+app.py                     Flask app and GitHub client
+tests/test_app.py          Unit tests with a fake GitHub client
+requirements.txt           Pinned runtime dependencies
+requirements-dev.txt       Test and lint dependencies
+Dockerfile                 Python 3.12 image
+pyproject.toml             pytest and ruff settings
+.github/workflows/ci.yml   Lint and test on push and pull request
+AGENTS.md                  Notes for coding agents
+CLAUDE.md                  Pointer to AGENTS.md
+```
+
+## Sample responses
+
+These are the bodies the sample config repo produces. The YAML responses are the files as committed. The JSON responses are converted, because that repo has no `.json` files.
+
+`GET /v1/dev-config.yml`
+
+```yaml
+welcome_message: "Hello from Dockerized Flask App"
+
+another_config: "foo bar"
+```
+
+`GET /v1/dev-config.json`
+
+```json
 {
-    "welcome_message": "Hello from Dockerized Flask App Test"
+  "welcome_message": "Hello from Dockerized Flask App",
+  "another_config": "foo bar"
 }
 ```
 
-If you commit any changes to the [config repo], the above responses should return the latest changes.
+`GET /v1/test-config.json`
 
-* Your application should take the Github repo URL as a command line argument.
-
-_Running your app without Docker_
-```sh
-$python app.py https://github.com/sithu/assignment1-config-example
-```
-
-* Update your *Dockerfile* from I.[5] step so that you can pass a GitHub repo URL from _docker run_ command.
-
-```sh
-docker run -d -p 5000:5000 assignment1-flask-app https://github.com/sithu/assignment1-config-example
+```json
+{
+  "welcome_message": "Hello from Dockerized Flask App Test"
+}
 ```
